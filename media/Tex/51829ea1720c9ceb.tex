@@ -1,0 +1,22 @@
+\documentclass[preview]{standalone}
+\usepackage[english]{babel}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{tikz}\usepackage[american]{circuitikz}
+\begin{document}
+\begin{circuitikz}
+[american voltages, baseline=(current bounding box.center)]
+\draw[opacity=0]
+(0,2)  to[short, o-] (0.8,2)
+       to[R, l=$R_1$] (0.8,0.5)
+       to[R, l=$R_2$] (0.8,-1)
+       to[short, -o] (0,-1)
+(0.8,-1) node[ground] {};
+\path[opacity=0] (0,2) node[left] {$V_{in}$};
+\path[opacity=0] (0.8,0.5) node[right] {$V_{out}$};
+\draw
+(0.8,0.5) to[short] (1.6,0.5)
+          to[R, l=$R_L$] (1.6,-1)
+          to[short] (0.8,-1);
+\end{circuitikz}
+\end{document}

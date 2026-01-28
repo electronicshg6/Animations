@@ -1,0 +1,17 @@
+[project]
+name = "electronics-animations"
+version = "0.1.0"
+description = "Reusable toolkit and projects for electronics and embedded systems animations using Manim and CircuitikZ."
+authors = [
+  { name = "Your Name", email = "you@example.com" }
+]
+requires-python = ">=3.10"
+dependencies = [
+  # Core animation library
+  "manim>=0.19.0",
+  # Uncomment to use the experimental manim-tikz integration
+  # "manim-tikz>=0.0.1a1",
+]
+
+[tool.mypy]
+python_version = "3.10"

@@ -1,0 +1,13 @@
+README.md
+pyproject.toml
+src/electroanim/__init__.py
+src/electroanim/aesthetics.py
+src/electroanim/circuitikz.py
+src/electroanim/helpers.py
+src/electroanim/scene_base.py
+src/electroanim/tex.py
+src/electronics_animations.egg-info/PKG-INFO
+src/electronics_animations.egg-info/SOURCES.txt
+src/electronics_animations.egg-info/dependency_links.txt
+src/electronics_animations.egg-info/requires.txt
+src/electronics_animations.egg-info/top_level.txt
