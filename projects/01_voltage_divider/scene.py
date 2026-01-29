@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from manim import (
     Axes,
+    Circle,
     Create,
     DecimalNumber,
     FadeIn,
@@ -43,6 +44,15 @@ def _scale_to_fit(mobj, max_w: float, max_h: float):
         return mobj
     s = min(max_w / mobj.width, max_h / mobj.height)
     mobj.scale(s)
+    return mobj
+
+
+def fit_to_rect(mobj, rect, pad_x: float = 0.15, pad_y: float = 0.15):
+    """Scale *mobj* to fit inside *rect* with padding, then centre it."""
+    avail_w = rect.width - 2 * pad_x
+    avail_h = rect.height - 2 * pad_y
+    _scale_to_fit(mobj, avail_w, avail_h)
+    mobj.move_to(rect.get_center())
     return mobj
 
 
@@ -100,9 +110,11 @@ class VoltageDivider(ElectroScene):
         circuit.align_to(top_rect, LEFT).shift(RIGHT * inner_pad_x)
         circuit.align_to(top_rect, UP).shift(DOWN * inner_pad_y)
 
-        # Match load circuit scale + position to base circuit
-        load_circuit.scale(circuit.width / load_circuit.width)
-        load_circuit.move_to(circuit)
+        # Match load circuit scale + position to base circuit, then scale up 81%
+        # (load circuit is wider due to RL, so needs extra scaling to match visual size)
+        # Shift right so Vin label stays on screen
+        load_circuit.scale(circuit.width / load_circuit.width * 1.81)
+        load_circuit.move_to(circuit).shift(RIGHT * 0.45)
 
         # -------------------------
         # Plot (right side)
@@ -270,39 +282,430 @@ class VoltageDivider(ElectroScene):
         # -------------------------
         # Animation sequence
         # -------------------------
-        self.play(FadeIn(circuit), Create(axes), FadeIn(bottom_panel), run_time=1.2)
-        self.play(FadeIn(y_label), run_time=0.4)
 
-        self.play(ring(circuit), run_time=0.6)
-        self.play(pop(eq), run_time=0.6)
-        self.wait(0.4)
+        # === SECTION 1: Introduction - Voltage divider and equation (~15s) ===
+        self.play(FadeIn(circuit), run_time=2.0)
+        self.wait(1.0)
+        self.play(Create(axes), FadeIn(bottom_panel), run_time=2.5)
+        self.play(FadeIn(y_label), run_time=0.8)
+        self.wait(1.5)
 
-        self.play(Create(input_wave), Create(output_wave), run_time=1.2)
-        self.play(FadeIn(legend), run_time=0.5)
-        self.play(FadeIn(example), run_time=0.7)
-        self.wait(0.6)
+        self.play(ring(circuit), run_time=1.2)
+        self.wait(0.8)
+        self.play(pop(eq), run_time=1.0)
+        self.wait(2.0)
 
-        self.play(r2.animate.set_value(20_000.0), run_time=3.2)
-        self.wait(0.4)
-        self.play(r2.animate.set_value(5_000.0), run_time=3.2)
-        self.wait(0.4)
-        self.play(r1.animate.set_value(20_000.0), run_time=2.8)
-        self.wait(0.4)
+        self.play(Create(input_wave), Create(output_wave), run_time=2.5)
+        self.wait(1.0)
+        self.play(FadeIn(legend), run_time=1.0)
+        self.play(FadeIn(example), run_time=1.2)
+        self.wait(2.5)
 
+        # === SECTION 2: Changing R values with dynamic voltage plot (~20s) ===
+        self.play(r2.animate.set_value(20_000.0), run_time=5.0)
+        self.wait(1.5)
+        self.play(r2.animate.set_value(5_000.0), run_time=5.0)
+        self.wait(1.5)
+        self.play(r1.animate.set_value(20_000.0), run_time=5.0)
+        self.wait(2.0)
+
+        # === SECTION 3: Load resistor section (~20s) ===
         self.play(
             Transform(circuit, load_circuit),
             load_line.animate.set_opacity(1),
             load_note.animate.set_opacity(1),
-            run_time=1.2,
+            run_time=2.5,
         )
-        self.wait(0.3)
+        self.wait(2.0)
 
-        self.play(rl.animate.set_value(2_000.0), run_time=3.6)
-        self.wait(0.2)
-        self.play(rl.animate.set_value(20_000.0), run_time=2.8)
+        self.play(rl.animate.set_value(2_000.0), run_time=6.0)
+        self.wait(1.5)
+        self.play(rl.animate.set_value(20_000.0), run_time=5.0)
+        self.wait(2.0)
+
+        self.play(load_note.animate.set_opacity(0), reg_note.animate.set_opacity(1), run_time=1.5)
+        self.wait(1.0)
+        self.play(vin.animate.set_value(12.0), run_time=4.0)
+        self.wait(1.0)
+        self.play(vin.animate.set_value(7.0), run_time=4.0)
+        self.wait(2.0)
+
+
+class DividerVsRegulatorScene(ElectroScene):
+    """
+    Split-screen comparison: voltage divider (unregulated) vs regulator (regulated).
+    Uses real CircuitikZ diagrams for both halves.
+    2-row × 2-column grid: left = circuits, right = VDD plot.
+    """
+
+    def construct(self) -> None:
+        # =========================================================
+        # §1  Electrical model (fixed teaching values)
+        # =========================================================
+        V_IN = 5.0
+        R1 = 91.0
+        R2 = 180.0
+        V_TH = V_IN * R2 / (R1 + R2)          # ≈ 3.321 V
+        R_TH = (R1 * R2) / (R1 + R2)           # ≈ 60.4 Ω
+        I_BASE = 0.0012                         # 1.2 mA
+        V_F = 2.0
+        R_LED = 680.0
+        V_BOR = 3.0
+        V_REG = 3.30
+
+        def calc_vdd_div(n: int) -> float:
+            if n == 0:
+                return V_TH - R_TH * I_BASE
+            num = V_TH - R_TH * I_BASE + n * R_TH * V_F / R_LED
+            den = 1 + n * R_TH / R_LED
+            return num / den
+
+        # Pre-compute for sanity (N=0→3.249, N=1→3.147, N=2→3.060, N=3→2.986)
+        vdd_pts = [calc_vdd_div(i) for i in range(4)]
+
+        # =========================================================
+        # §2  Strict grid layout  (2 rows × 2 cols)
+        #
+        #  ┌─────────────────────┬───────────────┐
+        #  │ TITLE TOP           │               │
+        #  │ [circuit: divider]  │               │
+        #  │ VDD readout         │   VDD plot    │
+        #  ├─────────────────────┤  (spans both  │
+        #  │ TITLE BOT           │   rows)       │
+        #  │ [circuit: regulator]│               │
+        #  │ VDD readout         │               │
+        #  ├─────────────────────┤               │
+        #  │ [callouts strip]    │               │
+        #  └─────────────────────┴───────────────┘
+        # =========================================================
+        margin = 0.25
+        gap_x = 0.25
+        gap_y = 0.12
+        title_h = 0.40
+        callout_h = 1.05          # dedicated strip below bottom circuit
+
+        frame_w = config.frame_width - 2 * margin
+        frame_h = config.frame_height - 2 * margin
+
+        left_col_w = frame_w * 0.58
+        right_col_w = frame_w - left_col_w - gap_x
+
+        # Rows: 2 titles + 2 circuit rows + gap + callout strip
+        circuit_row_h = (frame_h - 2 * title_h - gap_y - callout_h) / 2
+
+        # Anchor: top-left of usable area
+        grid_left = -config.frame_width / 2 + margin
+        grid_top = config.frame_height / 2 - margin
+
+        # Y coordinates (top-down)
+        top_title_cy = grid_top - title_h / 2
+        top_circ_cy = grid_top - title_h - circuit_row_h / 2
+        sep_y = grid_top - title_h - circuit_row_h - gap_y / 2
+        bot_title_cy = grid_top - title_h - circuit_row_h - gap_y - title_h / 2
+        bot_circ_cy = grid_top - title_h - circuit_row_h - gap_y - title_h - circuit_row_h / 2
+        callout_cy = grid_top - 2 * title_h - 2 * circuit_row_h - gap_y - callout_h / 2
+
+        # X centres
+        lc_cx = grid_left + left_col_w / 2
+        rc_cx = grid_left + left_col_w + gap_x + right_col_w / 2
+
+        # Build invisible bounding rectangles for placement
+        top_circ_rect = Rectangle(width=left_col_w, height=circuit_row_h)
+        top_circ_rect.move_to([lc_cx, top_circ_cy, 0])
+
+        bot_circ_rect = Rectangle(width=left_col_w, height=circuit_row_h)
+        bot_circ_rect.move_to([lc_cx, bot_circ_cy, 0])
+
+        callout_rect = Rectangle(width=left_col_w, height=callout_h)
+        callout_rect.move_to([lc_cx, callout_cy, 0])
+
+        plot_rect = Rectangle(
+            width=right_col_w,
+            height=2 * circuit_row_h + 2 * title_h + gap_y + callout_h,
+        )
+        plot_rect.move_to([rc_cx, (grid_top + grid_top - frame_h) / 2, 0])
+
+        # =========================================================
+        # §3  Section labels (in title rows – never over circuits)
+        # =========================================================
+        top_label = MathTex(r"\text{UNREGULATED (Divider)}").set_color(WARN).scale(0.60)
+        top_label.move_to([lc_cx, top_title_cy, 0])
+
+        bot_label = MathTex(r"\text{REGULATED (3.3\,V Regulator)}").set_color(ACCENT_1).scale(0.60)
+        bot_label.move_to([lc_cx, bot_title_cy, 0])
+
+        separator = Line(
+            start=[grid_left, sep_y, 0],
+            end=[grid_left + left_col_w, sep_y, 0],
+        ).set_color(FG).set_opacity(0.25)
+
+        # =========================================================
+        # §4  CircuitikZ diagrams (left column, fitted to rects)
+        # =========================================================
+        circ_top = circuitikz_from_file(
+            "projects/01_voltage_divider/assets/circuit/divider_mcu_leds.tikz"
+        )
+        circ_top.set_color(FG)
+        fit_to_rect(circ_top, top_circ_rect, pad_x=0.10, pad_y=0.10)
+
+        circ_bot = circuitikz_from_file(
+            "projects/01_voltage_divider/assets/circuit/reg_mcu_leds.tikz"
+        )
+        circ_bot.set_color(FG)
+        fit_to_rect(circ_bot, bot_circ_rect, pad_x=0.10, pad_y=0.10)
+
+        # =========================================================
+        # §5  Value trackers
+        # =========================================================
+        n_leds = ValueTracker(0)
+
+        def get_n() -> int:
+            return int(round(n_leds.get_value()))
+
+        def vdd_top_val() -> float:
+            return calc_vdd_div(get_n())
+
+        # =========================================================
+        # §6  VDD readouts (anchored in title rows, right-aligned)
+        # =========================================================
+        vdd_ro_top_pos = [grid_left + left_col_w - 0.10, top_title_cy, 0]
+        vdd_ro_bot_pos = [grid_left + left_col_w - 0.10, bot_title_cy, 0]
+
+        vdd_readout_top = always_redraw(
+            lambda: MathTex(
+                r"V_{DD}\!=\!%.2f\,\text{V}" % vdd_top_val()
+            ).set_color(
+                WARN if vdd_top_val() < V_BOR else ACCENT_1
+            ).scale(0.55).move_to(vdd_ro_top_pos).align_to(
+                [vdd_ro_top_pos[0], 0, 0], RIGHT
+            )
+        )
+
+        vdd_readout_bot = (
+            MathTex(r"V_{DD}\!=\!3.30\,\text{V}")
+            .set_color(ACCENT_1).scale(0.55)
+            .move_to(vdd_ro_bot_pos)
+        )
+        vdd_readout_bot.align_to([vdd_ro_bot_pos[0], 0, 0], RIGHT)
+
+        # =========================================================
+        # §7  Callout strip (Thévenin card + Power waste meter)
+        #     Positioned inside callout_rect – below both circuits
+        # =========================================================
+        thevenin_card_bg = RoundedRectangle(
+            corner_radius=0.08, width=2.80, height=0.88,
+        ).set_fill(FG, opacity=0.06).set_stroke(WARN, width=1.2)
+
+        thevenin_title = MathTex(r"\text{Thévenin Model}").set_color(WARN).scale(0.42)
+        thevenin_vth = MathTex(
+            r"V_{th} = V_{in}\frac{R_2}{R_1+R_2} \approx 3.32\,\text{V}"
+        ).set_color(FG).scale(0.35)
+        thevenin_rth = MathTex(
+            r"R_{th} = R_1 \parallel R_2 \approx 60.4\,\Omega"
+        ).set_color(WARN).scale(0.35)
+
+        thevenin_content = VGroup(thevenin_title, thevenin_vth, thevenin_rth).arrange(
+            DOWN, buff=0.07, aligned_edge=LEFT
+        )
+        thevenin_content.move_to(thevenin_card_bg.get_center())
+        thevenin_card = VGroup(thevenin_card_bg, thevenin_content)
+
+        power_bg = RoundedRectangle(
+            corner_radius=0.06, width=2.00, height=0.88,
+        ).set_fill(WARN, opacity=0.08).set_stroke(WARN, width=1)
+
+        power_title = MathTex(r"\text{Divider Waste}").set_color(WARN).scale(0.38)
+        power_i = MathTex(r"I_{div} \approx 18.5\,\text{mA}").set_color(WARN).scale(0.34)
+        power_p = MathTex(r"P_{div} \approx 92\,\text{mW}").set_color(WARN).scale(0.34)
+
+        power_content = VGroup(power_title, power_i, power_p).arrange(
+            DOWN, buff=0.05, aligned_edge=LEFT
+        )
+        power_content.move_to(power_bg.get_center())
+        power_meter = VGroup(power_bg, power_content)
+
+        callout_group = VGroup(thevenin_card, power_meter).arrange(RIGHT, buff=0.20)
+        fit_to_rect(callout_group, callout_rect, pad_x=0.10, pad_y=0.06)
+
+        # =========================================================
+        # §8  VDD plot (right column, full height)
+        # =========================================================
+        plot_pad = 0.35
+        plot_w = plot_rect.width - 2 * plot_pad
+        plot_h = plot_rect.height - 2 * plot_pad - 0.30  # room for labels
+
+        axes = Axes(
+            x_range=[0, 3.5, 1],
+            y_range=[2.85, 3.45, 0.1],
+            x_length=plot_w,
+            y_length=plot_h,
+            axis_config={"color": FG, "include_numbers": False},
+            tips=False,
+        )
+        axes.move_to(plot_rect.get_center() + UP * 0.10)
+
+        x_label = MathTex(r"\text{LEDs on}").set_color(FG).scale(0.40)
+        x_label.next_to(axes, DOWN, buff=0.12)
+        y_label = MathTex(r"V_{DD}\;(\text{V})").set_color(FG).scale(0.38)
+        y_label.next_to(axes, LEFT, buff=0.08)
+
+        # Tick labels
+        x_ticks = VGroup()
+        for i in range(4):
+            t = MathTex(str(i)).set_color(FG).scale(0.34)
+            t.next_to(axes.c2p(i, 2.85), DOWN, buff=0.10)
+            x_ticks.add(t)
+
+        y_ticks = VGroup()
+        for v in [2.9, 3.0, 3.1, 3.2, 3.3, 3.4]:
+            t = MathTex("%.1f" % v).set_color(FG).scale(0.28)
+            t.next_to(axes.c2p(0, v), LEFT, buff=0.10)
+            y_ticks.add(t)
+
+        # Brown-out threshold line
+        bor_line = axes.plot(lambda x: V_BOR, x_range=[0, 3.5], color=WARN)
+        bor_line.set_stroke(width=2, opacity=0.6)
+        bor_label = MathTex(r"V_{BOR}\!=\!3.0\text{V}").set_color(WARN).scale(0.30)
+        bor_label.next_to(axes.c2p(3.5, V_BOR), RIGHT, buff=0.06)
+
+        # Regulator flat line
+        reg_line = axes.plot(lambda x: V_REG, x_range=[0, 3.5], color=ACCENT_1)
+        reg_line.set_stroke(width=2.5, opacity=0.6)
+
+        # ---- Divider staircase trace (always_redraw) ----
+        def make_div_trace():
+            n = get_n()
+            grp = VGroup()
+            # Draw horizontal shelves and vertical drops
+            for i in range(n + 1):
+                v = vdd_pts[i]
+                clr = ACCENT_2 if v >= V_BOR else WARN
+                # Horizontal shelf from i to i+1 (or i to i for last step)
+                x_end = i + 1 if i < n else i + 0.4
+                hseg = Line(
+                    axes.c2p(i, v), axes.c2p(min(x_end, 3.5), v),
+                    color=clr, stroke_width=3,
+                )
+                grp.add(hseg)
+                # Vertical drop to next step
+                if i < n:
+                    v_next = vdd_pts[i + 1]
+                    vseg = Line(
+                        axes.c2p(i + 1, v), axes.c2p(i + 1, v_next),
+                        color=ACCENT_2 if v_next >= V_BOR else WARN,
+                        stroke_width=3,
+                    )
+                    grp.add(vseg)
+            # Dot at current position
+            v_now = vdd_pts[n]
+            dot = Circle(radius=0.07).set_fill(
+                ACCENT_2 if v_now >= V_BOR else WARN, opacity=1
+            ).set_stroke(width=0)
+            dot.move_to(axes.c2p(n, v_now))
+            grp.add(dot)
+            return grp
+
+        div_trace = always_redraw(make_div_trace)
+
+        # Regulator dot (follows x only)
+        def make_reg_dot():
+            n = get_n()
+            dot = Circle(radius=0.07).set_fill(ACCENT_1, opacity=1).set_stroke(width=0)
+            dot.move_to(axes.c2p(n, V_REG))
+            return dot
+
+        reg_dot = always_redraw(make_reg_dot)
+
+        # Plot legend (anchored inside plot, top-right)
+        legend_div = VGroup(
+            Line(ORIGIN, RIGHT * 0.35).set_color(ACCENT_2),
+            MathTex(r"\text{Divider}").set_color(FG).scale(0.32),
+        ).arrange(RIGHT, buff=0.08)
+        legend_reg = VGroup(
+            Line(ORIGIN, RIGHT * 0.35).set_color(ACCENT_1),
+            MathTex(r"\text{Regulator}").set_color(FG).scale(0.32),
+        ).arrange(RIGHT, buff=0.08)
+        plot_legend = VGroup(legend_div, legend_reg).arrange(DOWN, aligned_edge=LEFT, buff=0.08)
+        plot_legend.move_to(axes.c2p(2.6, 3.42))
+
+        # =========================================================
+        # §9  Brown-out overlay
+        # =========================================================
+        brownout_text = MathTex(r"\text{BROWN-OUT RESET!}").set_color(WARN).scale(0.85)
+        brownout_text.move_to(top_circ_rect.get_center())
+
+        # =========================================================
+        # §10  Final summary captions
+        # =========================================================
+        summary_top = MathTex(
+            r"\text{Divider: good for sensing, bad for power}"
+        ).set_color(WARN).scale(0.50)
+        summary_top.next_to(top_circ_rect, DOWN, buff=0.04).align_to(top_circ_rect, LEFT)
+
+        summary_bot = MathTex(
+            r"\text{Regulator: stable supply}"
+        ).set_color(ACCENT_1).scale(0.50)
+        summary_bot.next_to(bot_circ_rect, DOWN, buff=0.04).align_to(bot_circ_rect, LEFT)
+
+        # =========================================================
+        # §11  Animation sequence
+        # =========================================================
+
+        # --- INTRO: labels + separator ---
+        self.play(
+            FadeIn(top_label), FadeIn(bot_label), FadeIn(separator),
+            run_time=1.5,
+        )
         self.wait(0.5)
 
-        self.play(load_note.animate.set_opacity(0), reg_note.animate.set_opacity(1), run_time=0.8)
-        self.play(vin.animate.set_value(12.0), run_time=2.0)
-        self.play(vin.animate.set_value(7.0), run_time=2.0)
+        # --- Circuits ---
+        self.play(FadeIn(circ_top), FadeIn(circ_bot), run_time=2.0)
+        self.wait(0.5)
+
+        # --- VDD readouts ---
+        self.play(FadeIn(vdd_readout_top), FadeIn(vdd_readout_bot), run_time=1.0)
+        self.wait(1.0)
+
+        # --- Callouts (Thévenin + waste) ---
+        self.play(FadeIn(thevenin_card), run_time=1.5)
+        self.play(pop(thevenin_rth), run_time=0.8)
         self.wait(0.8)
+        self.play(FadeIn(power_meter), run_time=1.2)
+        self.wait(1.0)
+
+        # --- Plot ---
+        self.play(
+            Create(axes), FadeIn(x_label), FadeIn(y_label),
+            FadeIn(x_ticks), FadeIn(y_ticks),
+            Create(bor_line), FadeIn(bor_label),
+            Create(reg_line),
+            FadeIn(plot_legend),
+            run_time=2.0,
+        )
+        self.play(FadeIn(div_trace), FadeIn(reg_dot), run_time=1.0)
+        self.wait(2.0)
+
+        # --- LED1 ON ---
+        self.play(n_leds.animate.set_value(1), run_time=2.5)
+        self.wait(2.0)
+
+        # --- LED2 ON ---
+        self.play(n_leds.animate.set_value(2), run_time=2.5)
+        self.wait(2.0)
+
+        # --- LED3 ON → brown-out ---
+        self.play(n_leds.animate.set_value(3), run_time=2.5)
+        self.wait(1.0)
+
+        # Brown-out effects
+        self.play(circ_top.animate.set_opacity(0.35), run_time=0.5)
+        self.play(FadeIn(brownout_text, scale=1.3), run_time=0.4)
+        self.wait(0.5)
+        self.play(FadeOut(brownout_text), run_time=0.5)
+        self.wait(0.5)
+        self.play(circ_top.animate.set_opacity(1.0), run_time=0.6)
+        self.wait(1.0)
+
+        # --- Final summary ---
+        self.play(FadeIn(summary_top), FadeIn(summary_bot), run_time=2.0)
+        self.wait(4.0)

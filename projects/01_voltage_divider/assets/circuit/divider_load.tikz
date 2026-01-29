@@ -1,6 +1,5 @@
 [american voltages, baseline=(current bounding box.center)]
-% Loaded divider: move RL branch right, and put Vout label on a stub ABOVE the node
-% so it cannot be covered by the branch wire.
+% Loaded divider: Vout stub at top of RL (right side) to avoid overlap with R1.
 \draw
 (0,2)  to[short, o-] (0.8,2)
        to[R, l^=$R_1$, label distance=0.18cm] (0.8,0.5) coordinate (VOUTNODE)
@@ -10,12 +9,12 @@
 \draw (0,2) node[left, xshift=-2pt] {$V_{in}$};
 
 % Load branch (pushed right for clarity)
-\draw (VOUTNODE) to[short] (2.65,0.5)
+\draw (VOUTNODE) to[short] (2.65,0.5) coordinate (RLTOP)
                  to[R, l^=$R_L$, label distance=0.16cm] (2.65,-1)
                  to[short] (0.8,-1);
 
-% Vout test point stub upwards
-\draw (VOUTNODE) to[short] (0.8,0.80) to[short, -o] (0.8,1.05);
+% Vout test point stub at top of RL, extending right
+\draw (RLTOP) to[short] (2.95,0.5) to[short, -o] (3.20,0.5);
 
 % Label drawn last so it always stays on top
-\draw (0.8,1.05) node[above, yshift=2pt] {$V_{out}$};
+\draw (3.20,0.5) node[right, xshift=2pt] {$V_{out}$};

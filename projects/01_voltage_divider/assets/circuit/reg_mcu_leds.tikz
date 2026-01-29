@@ -1,0 +1,47 @@
+[american voltages, baseline=(current bounding box.center)]
+% ── 3.3V regulator supply block ─────────────────────────────────
+\draw (0,2.8) to[short, o-] (0.8,2.8);
+\draw (0,2.8) node[left, font=\footnotesize] {$V_{in}$};
+
+% Regulator box
+\draw (0.8,1.8) node[draw, rounded corners=2pt,
+      minimum width=1.0cm, minimum height=0.8cm,
+      font=\tiny] (reg) {3.3V REG};
+\draw (0.8,2.8) -- (reg.north);
+\draw (reg.south) -- (0.8,0) -- (0.8,-0.3) node[ground]{};
+
+% Output pin from regulator to VDD rail
+\draw (reg.east) -- ++(0.3,0) coordinate (REGOUT) -- ++(0,0) |- (1.6,1.4);
+
+% ── VDD rail ────────────────────────────────────────────────────
+\draw[thick] (1.6,1.4) -- (6.0,1.4);
+\draw (3.0,1.7) node[above, font=\scriptsize] {VDD rail};
+
+% ── MCU block ───────────────────────────────────────────────────
+\draw (2.6,0.0) node[draw, rounded corners=3pt,
+      minimum width=1.4cm, minimum height=1.6cm,
+      font=\footnotesize] (mcu) {MCU};
+% VDD pin
+\draw (mcu.north) -- ++(0,0.25) -- (2.6,1.4);
+
+% ── GPIO pins (right side, evenly spaced) ───────────────────────
+\path (mcu.east) ++(0, 0.4)  coordinate (g1);
+\path (mcu.east) ++(0, 0.0)  coordinate (g2);
+\path (mcu.east) ++(0,-0.4)  coordinate (g3);
+
+% ── LED + resistor branches to ground ───────────────────────────
+% LED1
+\draw (g1) to[short] ++(0.4,0)
+           to[led, l^={\tiny LED1}, label distance=0.06cm] ++(1.0,0)
+           to[R, l^={\tiny $680\Omega$}, label distance=0.06cm] ++(0,-1.2)
+           node[ground]{};
+% LED2
+\draw (g2) to[short] ++(0.4,0)
+           to[led, l^={\tiny LED2}, label distance=0.06cm] ++(1.0,0)
+           to[R, l^={\tiny $680\Omega$}, label distance=0.06cm] ++(0,-1.2)
+           node[ground]{};
+% LED3
+\draw (g3) to[short] ++(0.4,0)
+           to[led, l^={\tiny LED3}, label distance=0.06cm] ++(1.0,0)
+           to[R, l^={\tiny $680\Omega$}, label distance=0.06cm] ++(0,-1.2)
+           node[ground]{};
