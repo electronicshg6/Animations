@@ -1,9 +1,15 @@
 [american voltages, baseline=(current bounding box.center)]
+% Voltage divider with a dedicated Vout output node (stub) so the label never sits under a wire.
 \draw
 (0,2)  to[short, o-] (0.8,2)
-       to[R, l^=$R_1$, label distance=0.18cm] (0.8,0.5)
-       to[R, l^=$R_2$, label distance=0.18cm] (0.8,-1)
-       to[short, -o] (0,-1)
-(0.8,-1) node[ground] {}
-(0,2) node[left, xshift=-2pt] {$V_{in}$}
-(0.8,0.5) node[right, xshift=3pt] {$V_{out}$};
+       to[R, l^=$R_1$, label distance=0.18cm] (0.8,0.5) coordinate (VOUTNODE)
+       to[R, l^=$R_2$, label distance=0.24cm] (0.8,-1)
+       to[short, -o] (0,-1);
+\draw (0.8,-1) node[ground] {};
+\draw (0,2) node[left, xshift=-2pt] {$V_{in}$};
+
+% Output stub + node
+\draw (VOUTNODE) to[short] (1.20,0.5) to[short, -o] (1.45,0.5);
+
+% Place label AFTER the wiring so it always renders on top.
+\draw (1.45,0.5) node[above, yshift=2pt] {$V_{out}$};
