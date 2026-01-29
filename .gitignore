@@ -1,1 +1,12 @@
 media/videos/
+
+# Python cache and build artifacts
+__pycache__/
+*.pyc
+*.egg-info/
+
+# Generated TeX/SVG files
+media/Tex/
+
+# Claude Code
+.claude/
