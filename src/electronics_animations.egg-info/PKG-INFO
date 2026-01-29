@@ -1,7 +1,0 @@
-Metadata-Version: 2.1
-Name: electronics-animations
-Version: 0.1.0
-Summary: Reusable toolkit and projects for electronics and embedded systems animations using Manim and CircuitikZ.
-Author-email: Your Name <you@example.com>
-Requires-Python: >=3.10
-Requires-Dist: manim>=0.19.0
